@@ -95,7 +95,19 @@
         map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
     }
 
-    window.onload = initMap;
+    window.onload = function() {
+        initMap(); // 1. 지도 생성 먼저 하고
+
+        // 2. K값 입력창(k-value)에서 엔터키(Enter) 감지 이벤트 추가
+        var kInput = document.getElementById('k-value');
+        kInput.addEventListener("keyup", function(event) {
+            // 눌린 키가 'Enter'라면 분석 함수 실행
+            if (event.key === "Enter") {
+                event.preventDefault(); // 기본 동작(새로고침 등) 방지
+                runAnalysis(); // 분석 버튼 누른 것과 똑같이 실행
+            }
+        });
+    };
 
     async function runAnalysis() {
         const fileInput = document.getElementById('csv-file');
