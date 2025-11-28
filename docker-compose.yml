@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # 로컬의 app 폴더를 컨테이너 내부와 연결 (코드 수정 시 바로 반영됨)
+      - ./app:/code/app
+    environment:
+      - WATCHFILES_FORCE_POLLING=true # 윈도우/맥 파일 변경 감지용 설정
