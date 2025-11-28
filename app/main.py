@@ -1,33 +1,54 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 import pandas as pd
 import os
+from app.services import perform_kmeans # 함수 임포트
 
 app = FastAPI()
 
-# CSV 파일 위치 (app 폴더 내에 있다고 가정)
-# 만약 data 폴더 안에 넣으셨다면 "app/data/orders.csv"로 수정하세요.
-# 컨테이너 기준 경로는 /code/app/... 입니다.
-CSV_FILE_PATH = "app/data/orders.csv" 
+# 데이터 파일 경로
+CSV_FILE_PATH = "app/data/orders.csv"
 
-@app.get("/")
+# 1. [Pydantic] 요청 데이터 검증 모델 (설계도)
+class AnalyzeRequest(BaseModel):
+    k: int # 사용자는 반드시 숫자(int)로 k를 보내야 함
+
+@app.get("/", response_class=HTMLResponse)
 def read_root():
-    return {"message": "GeoLogistics AI Service is Running!"}
+    """
+    메인 페이지 (index.html)를 읽어서 반환
+    """
+    # HTML 파일 경로
+    html_path = "app/index.html"
+    
+    with open(html_path, "r", encoding="utf-8") as f:
+        return f.read()
 
-@app.get("/data")
-def get_all_data():
+@app.post("/analyze")
+def analyze_data(request: AnalyzeRequest):
     """
-    저장된 CSV 데이터를 읽어서 그대로 반환하는 테스트용 API
+    K-Means 분석 요청을 처리하는 API
     """
+    # 1. 데이터 파일 확인
     if not os.path.exists(CSV_FILE_PATH):
-        raise HTTPException(status_code=404, detail="Data file not found.")
-    
-    # Pandas로 CSV 읽기
-    df = pd.read_csv(CSV_FILE_PATH)
-    
-    # NaN(빈 값)이 있으면 JSON 변환 시 에러가 나므로 처리
-    df = df.fillna("")
-    
-    # DataFrame -> Dictionary(JSON) 변환
-    result = df.to_dict(orient="records")
-    
-    return {"count": len(result), "data": result}
+        raise HTTPException(status_code=404, detail="데이터 파일이 없습니다. (orders.csv)")
+
+    # 2. 데이터 읽기
+    try:
+        df = pd.read_csv(CSV_FILE_PATH)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"CSV 읽기 실패: {str(e)}")
+
+    # 3. 유효성 검사 (데이터 개수보다 K가 크면 안됨)
+    if request.k > len(df):
+        raise HTTPException(status_code=400, detail="K값이 데이터 개수보다 큽니다.")
+    if request.k < 1:
+        raise HTTPException(status_code=400, detail="K값은 1 이상이어야 합니다.")
+
+    # 4. 분석 수행 (services.py의 함수 호출)
+    try:
+        result = perform_kmeans(df, request.k)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"분석 중 오류 발생: {str(e)}")

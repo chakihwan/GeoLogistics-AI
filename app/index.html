@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoLogistics AI - 물류 거점 최적화</title>
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Noto Sans KR', sans-serif; }
+        
+        /* 전체 레이아웃: 왼쪽 컨트롤패널, 오른쪽 지도 */
+        .container { display: flex; height: 100vh; }
+        
+        /* 컨트롤 패널 스타일 */
+        .sidebar {
+            width: 300px;
+            padding: 20px;
+            background: #f8f9fa;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        .map-container { flex-grow: 1; }
+        
+        /* 버튼 및 입력창 스타일 */
+        .control-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="number"] { width: 100%; padding: 8px; box-sizing: border-box; }
+        button {
+            width: 100%; padding: 10px;
+            background-color: #3b5bdb; color: white;
+            border: none; cursor: pointer; font-size: 16px;
+            border-radius: 4px;
+        }
+        button:hover { background-color: #2c42a5; }
+        
+        /* 결과 통계 박스 */
+        #result-stats {
+            margin-top: 20px; padding: 10px;
+            background: white; border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+    </style>
+    
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=20d47f71da902d9cba6bbd0bb27ecbdd"></script>
+</head>
+<body>
+
+<div class="container">
+    <div class="sidebar">
+        <h2>🚚 물류 거점 최적화</h2>
+        <p>AI 기반 최적 입지 선정 서비스</p>
+        
+        <div class="control-group">
+            <label for="k-value">설치할 창고 개수 (K)</label>
+            <input type="number" id="k-value" value="3" min="1" max="10">
+        </div>
+        
+        <button onclick="runAnalysis()">📍 분석 실행</button>
+        
+        <div id="result-stats">
+            <p>분석 버튼을 눌러보세요.</p>
+        </div>
+    </div>
+    
+    <div id="map" class="map-container"></div>
+</div>
+
+<script>
+    var map;
+    var markers = []; // 생성된 마커들을 담아둘 배열 (지우기 위해 필요)
+
+    // 1. 지도 초기화 함수
+    function initMap() {
+        var container = document.getElementById('map');
+        var options = {
+            center: new kakao.maps.LatLng(37.498095, 127.027610), // 강남역 중심
+            level: 5
+        };
+        map = new kakao.maps.Map(container, options);
+    }
+
+    // 페이지 로드 시 지도 생성
+    window.onload = initMap;
+
+    // 2. 분석 실행 함수 (버튼 클릭 시 호출)
+    async function runAnalysis() {
+        const k = document.getElementById('k-value').value;
+        const resultDiv = document.getElementById('result-stats');
+        
+        resultDiv.innerHTML = "⏳ 분석 중입니다...";
+
+        try {
+            // 백엔드 API 호출 (FastAPI)
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ k: parseInt(k) })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                alert("에러: " + err.detail);
+                return;
+            }
+
+            const data = await response.json();
+            drawResult(data); // 결과 그리기
+            resultDiv.innerHTML = `✅ 분석 완료!<br>총 ${data.points.length}개 지점<br>${data.centers.length}개 거점 추천됨`;
+
+        } catch (error) {
+            console.error(error);
+            alert("서버 연결 실패!");
+            resultDiv.innerHTML = "❌ 분석 실패";
+        }
+    }
+
+    // 3. 지도에 결과 그리기
+    function drawResult(data) {
+        // 기존 마커 모두 제거
+        for (var i = 0; i < markers.length; i++) {
+            markers[i].setMap(null);
+        }
+        markers = [];
+
+        // 색상 팔레트 (군집별 색깔 구분)
+        const colors = ['#FF0000', '#0000FF', '#008000', '#FFA500', '#800080']; 
+
+        // (1) 일반 배달 위치 마커 (작은 점) 표시
+        // 성능을 위해 Circle(원) 객체 사용
+        data.points.forEach(point => {
+            var circle = new kakao.maps.Circle({
+                center : new kakao.maps.LatLng(point.lat, point.lon),
+                radius: 15, // 반지름 (m)
+                strokeWeight: 1,
+                strokeColor: colors[point.cluster % colors.length],
+                strokeOpacity: 0.8,
+                fillColor: colors[point.cluster % colors.length],
+                fillOpacity: 0.6
+            });
+            circle.setMap(map);
+            markers.push(circle); // 나중에 지우기 위해 저장
+        });
+
+        // (2) 추천 물류 거점 마커 (큰 깃발) 표시
+        var imageSrc = "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png"; 
+        
+        data.centers.forEach(center => {
+            var imageSize = new kakao.maps.Size(35, 50); 
+            var markerImage = new kakao.maps.MarkerImage(imageSrc, imageSize); 
+            
+            var marker = new kakao.maps.Marker({
+                map: map,
+                position: new kakao.maps.LatLng(center.lat, center.lon),
+                title: "추천 거점 " + center.cluster_id,
+                image: markerImage
+            });
+            markers.push(marker);
+        });
+    }
+</script>
+
+</body>
+</html>
