@@ -1,54 +1,58 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
 import pandas as pd
+import io # 메모리 상의 파일을 읽기 위해 필요
 import os
-from app.services import perform_kmeans # 함수 임포트
+from app.services import perform_kmeans
 
 app = FastAPI()
 
-# 데이터 파일 경로
-CSV_FILE_PATH = "app/data/orders.csv"
-
-# 1. [Pydantic] 요청 데이터 검증 모델 (설계도)
-class AnalyzeRequest(BaseModel):
-    k: int # 사용자는 반드시 숫자(int)로 k를 보내야 함
-
+# 메인 페이지 로드 (그대로 유지)
 @app.get("/", response_class=HTMLResponse)
 def read_root():
-    """
-    메인 페이지 (index.html)를 읽어서 반환
-    """
-    # HTML 파일 경로
-    html_path = "app/index.html"
+    # 1. 환경 변수에서 키 가져오기 (없으면 빈 문자열)
+    kakao_key = os.getenv("KAKAO_JS_KEY", "")
     
-    with open(html_path, "r", encoding="utf-8") as f:
-        return f.read()
-
+    with open("app/index.html", "r", encoding="utf-8") as f:
+        html_content = f.read()
+        
+    # 2. HTML 안의 {kakao_key} 부분을 진짜 키로 교체 (Server-Side Injection)
+    final_html = html_content.replace("{kakao_key}", kakao_key)
+    
+    return HTMLResponse(content=final_html)
+    
 @app.post("/analyze")
-def analyze_data(request: AnalyzeRequest):
+async def analyze_data(
+    k: int = Form(...),       # HTML Form에서 'k'라는 이름으로 온 값
+    file: UploadFile = File(...) # HTML Form에서 'file'이라는 이름으로 온 파일
+):
     """
-    K-Means 분석 요청을 처리하는 API
+    사용자가 업로드한 CSV 파일을 받아 K-Means 분석 수행
     """
-    # 1. 데이터 파일 확인
-    if not os.path.exists(CSV_FILE_PATH):
-        raise HTTPException(status_code=404, detail="데이터 파일이 없습니다. (orders.csv)")
+    # 1. 파일 형식 검사 (확장자 확인)
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="CSV 파일만 업로드 가능합니다.")
 
-    # 2. 데이터 읽기
+    # 2. 업로드된 파일 읽기
     try:
-        df = pd.read_csv(CSV_FILE_PATH)
+        # 파일 내용을 바이트(byte)로 읽음
+        contents = await file.read()
+        # 바이트 데이터를 Pandas DataFrame으로 변환
+        df = pd.read_csv(io.BytesIO(contents))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"CSV 읽기 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"파일 읽기 실패: {str(e)}")
 
-    # 3. 유효성 검사 (데이터 개수보다 K가 크면 안됨)
-    if request.k > len(df):
+    # 3. 데이터 컬럼 확인 (lat, lon이 있는지)
+    if 'lat' not in df.columns or 'lon' not in df.columns:
+         raise HTTPException(status_code=400, detail="CSV 파일에 'lat'(위도), 'lon'(경도) 컬럼이 있어야 합니다.")
+
+    # 4. K값 유효성 검사
+    if k > len(df):
         raise HTTPException(status_code=400, detail="K값이 데이터 개수보다 큽니다.")
-    if request.k < 1:
-        raise HTTPException(status_code=400, detail="K값은 1 이상이어야 합니다.")
-
-    # 4. 분석 수행 (services.py의 함수 호출)
+    
+    # 5. 분석 수행 (기존 로직 재사용)
     try:
-        result = perform_kmeans(df, request.k)
+        result = perform_kmeans(df, k)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"분석 중 오류 발생: {str(e)}")
