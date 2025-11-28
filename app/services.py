@@ -65,3 +65,24 @@ def perform_kmeans(df: pd.DataFrame, k: int):
                 continue
 
     return results
+
+def calculate_elbow(df: pd.DataFrame, max_k: int = 10):
+    """
+    K=1 ~ max_k 까지 반복하며 Inertia(군집 내 오차 제곱합)를 계산
+    """
+    X = df[['lat', 'lon']].values
+    inertias = []
+    
+    # 데이터 개수가 max_k보다 적으면 데이터 개수까지만 반복
+    limit = min(len(df), max_k)
+    
+    for k in range(1, limit + 1):
+        # random_state를 고정해야 그래프가 흔들리지 않음
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        kmeans.fit(X)
+        inertias.append(kmeans.inertia_)
+        
+    return {
+        "ks": list(range(1, limit + 1)),
+        "inertias": inertias
+    }

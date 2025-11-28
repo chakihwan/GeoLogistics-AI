@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import pandas as pd
 import io # 메모리 상의 파일을 읽기 위해 필요
 import os
@@ -8,7 +9,9 @@ from app.services import perform_kmeans
 
 app = FastAPI()
 
-# 메인 페이지 로드 (그대로 유지)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# 메인 페이지 로드 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     # 1. 환경 변수에서 키 가져오기 (없으면 빈 문자열)
@@ -17,9 +20,8 @@ def read_root():
     with open("app/index.html", "r", encoding="utf-8") as f:
         html_content = f.read()
         
-    # 2. HTML 안의 {kakao_key} 부분을 진짜 키로 교체 (Server-Side Injection)
+    # 2. HTML 안의 {kakao_key} 
     final_html = html_content.replace("{kakao_key}", kakao_key)
-    
     return HTMLResponse(content=final_html)
     
 @app.post("/analyze")
@@ -58,3 +60,27 @@ async def analyze_data(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"분석 중 오류 발생: {str(e)}")
+
+@app.post("/elbow")
+async def get_elbow_data(file: UploadFile = File(...)):
+    """
+    Elbow Method 그래프를 그리기 위한 데이터 반환
+    """
+    # 파일 읽기 로직 (analyze와 동일)
+    try:
+        contents = await file.read()
+        df = pd.read_csv(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"파일 읽기 실패: {str(e)}")
+
+    if 'lat' not in df.columns or 'lon' not in df.columns:
+         raise HTTPException(status_code=400, detail="필수 컬럼 누락")
+
+    # 분석 수행
+    try:
+        # 연출을 위한 딜레이 (선택사항)
+        time.sleep(1)
+        data = calculate_elbow(df)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"계산 중 오류: {str(e)}")
