@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse
 import pandas as pd
 import io # 메모리 상의 파일을 읽기 위해 필요
 import os
+import time
 from app.services import perform_kmeans
 
 app = FastAPI()
@@ -49,7 +50,8 @@ async def analyze_data(
     # 4. K값 유효성 검사
     if k > len(df):
         raise HTTPException(status_code=400, detail="K값이 데이터 개수보다 큽니다.")
-    
+    time.sleep(1.0)
+
     # 5. 분석 수행 (기존 로직 재사용)
     try:
         result = perform_kmeans(df, k)

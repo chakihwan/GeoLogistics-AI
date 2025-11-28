@@ -4,65 +4,71 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GeoLogistics AI - 물류 거점 최적화</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; padding: 0; font-family: 'Noto Sans KR', sans-serif; }
-        
-        /* 전체 레이아웃: 왼쪽 컨트롤패널, 오른쪽 지도 */
+        body { margin: 0; padding: 0; font-family: 'Noto Sans KR', sans-serif; color: #333; }
         .container { display: flex; height: 100vh; }
         
-        /* 컨트롤 패널 스타일 */
+        /* 사이드바 디자인 개선 */
         .sidebar {
-            width: 300px;
-            padding: 20px;
-            background: #f8f9fa;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-            z-index: 10;
+            width: 320px; padding: 25px; background: #ffffff;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05); z-index: 10; display: flex; flex-direction: column;
         }
+        h2 { margin-top: 0; color: #2c3e50; }
+        .description { color: #666; font-size: 0.9rem; margin-bottom: 30px; }
         .map-container { flex-grow: 1; }
         
-        /* 버튼 및 입력창 스타일 */
-        .control-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="number"] { width: 100%; padding: 8px; box-sizing: border-box; }
+        .control-group { margin-bottom: 25px; }
+        label { display: block; margin-bottom: 8px; font-weight: 700; color: #34495e; }
+        input[type="file"], input[type="number"] {
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box;
+        }
         button {
-            width: 100%; padding: 10px;
-            background-color: #3b5bdb; color: white;
-            border: none; cursor: pointer; font-size: 16px;
-            border-radius: 4px;
+            width: 100%; padding: 12px; background-color: #3498db; color: white;
+            border: none; cursor: pointer; font-size: 16px; font-weight: bold; border-radius: 6px;
+            transition: background-color 0.3s;
         }
-        button:hover { background-color: #2c42a5; }
+        button:hover { background-color: #2980b9; }
         
-        /* 결과 통계 박스 */
         #result-stats {
-            margin-top: 20px; padding: 10px;
-            background: white; border-radius: 5px;
-            border: 1px solid #ddd;
+            margin-top: auto; /* 하단 고정 */
+            padding: 15px; background: #f1f2f6; border-radius: 8px; font-size: 0.95rem;
         }
+
+        /* 🔄 로딩 스피너 CSS */
+        .spinner {
+            border: 4px solid #f3f3f3; border-top: 4px solid #3498db;
+            border-radius: 50%; width: 30px; height: 30px;
+            animation: spin 1s linear infinite; margin: 10px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hidden { display: none; }
     </style>
     
-    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey={kakao_key}"></script>
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey={kakao_key}&libraries=services"></script>
 </head>
 <body>
 
 <div class="container">
     <div class="sidebar">
-        <h2>🚚 물류 거점 최적화</h2>
-        <p>CSV 파일을 업로드하여 분석합니다.</p>
+        <h2>🚚 GeoLogistics AI</h2>
+        <p class="description">데이터 기반 스마트 물류 거점 최적화</p>
         
         <div class="control-group">
-            <label for="csv-file">1. 데이터 파일 업로드 (CSV)</label>
+            <label for="csv-file">📂 1. 데이터 파일 업로드 (.csv)</label>
             <input type="file" id="csv-file" accept=".csv">
         </div>
 
         <div class="control-group">
-            <label for="k-value">2. 설치할 창고 개수 (K)</label>
+            <label for="k-value">🏢 2. 설치할 거점 개수 (K)</label>
             <input type="number" id="k-value" value="3" min="1" max="10">
         </div>
         
-        <button onclick="runAnalysis()">📍 분석 실행</button>
+        <button onclick="runAnalysis()">🚀 분석 시작</button>
         
         <div id="result-stats">
-            <p>파일을 선택하고 분석 버튼을 누르세요.</p>
+            <div id="status-text">파일을 선택하고 분석 버튼을 누르세요.</div>
+            <div id="loading-spinner" class="spinner hidden"></div>
         </div>
     </div>
     
@@ -72,91 +78,163 @@
 <script>
     var map;
     var markers = []; 
+    var infoWindows = []; // 열려있는 인포윈도우를 관리하기 위한 배열
 
     function initMap() {
         var container = document.getElementById('map');
         var options = {
             center: new kakao.maps.LatLng(37.498095, 127.027610),
-            level: 6 // 지도를 조금 더 넓게 보이게 조정
+            level: 7 // 지도를 조금 더 넓게
         };
         map = new kakao.maps.Map(container, options);
+        
+        // 지도 타입 컨트롤러 (스카이뷰 등) 추가
+        var mapTypeControl = new kakao.maps.MapTypeControl();
+        map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
+        var zoomControl = new kakao.maps.ZoomControl();
+        map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
     }
 
     window.onload = initMap;
 
-    // ⚠️ 변경된 분석 함수
     async function runAnalysis() {
         const fileInput = document.getElementById('csv-file');
         const kValue = document.getElementById('k-value').value;
-        const resultDiv = document.getElementById('result-stats');
+        const statusText = document.getElementById('status-text');
+        const spinner = document.getElementById('loading-spinner');
 
-        // 1. 파일 선택 여부 확인
         if (fileInput.files.length === 0) {
             alert("CSV 파일을 먼저 선택해주세요!");
             return;
         }
 
-        resultDiv.innerHTML = "⏳ 파일 업로드 및 분석 중...";
+        // UI 로딩 상태로 변경
+        statusText.innerHTML = "데이터 분석 중입니다...";
+        spinner.classList.remove('hidden'); // 스피너 표시
 
-        // 2. FormData 객체 생성 (파일 전송용)
         const formData = new FormData();
-        formData.append('file', fileInput.files[0]); // 파일 담기
-        formData.append('k', kValue);               // K값 담기
+        formData.append('file', fileInput.files[0]);
+        formData.append('k', kValue);
 
         try {
-            // 3. 백엔드로 전송 (Content-Type 헤더는 fetch가 알아서 설정하므로 생략)
-            const response = await fetch('/analyze', {
-                method: 'POST',
-                body: formData 
-            });
+            const response = await fetch('/analyze', { method: 'POST', body: formData });
 
             if (!response.ok) {
                 const err = await response.json();
-                alert("에러: " + err.detail);
-                resultDiv.innerHTML = "❌ 분석 실패";
-                return;
+                throw new Error(err.detail);
             }
 
             const data = await response.json();
             drawResult(data);
-            resultDiv.innerHTML = `✅ 분석 완료!<br>총 ${data.points.length}개 지점<br>${data.centers.length}개 거점 추천됨`;
+            statusText.innerHTML = `✅ <b>분석 완료!</b><br>총 ${data.points.length}개 지점 분석<br><b>${data.centers.length}개 최적 거점</b> 도출`;
 
         } catch (error) {
             console.error(error);
-            alert("서버 연결 실패!");
-            resultDiv.innerHTML = "❌ 서버 오류";
+            alert("오류 발생: " + error.message);
+            statusText.innerHTML = "❌ 분석 실패";
+        } finally {
+            spinner.classList.add('hidden'); // 스피너 숨김
         }
     }
 
-    // ... (drawResult 함수는 기존과 동일하게 유지) ...
-    function drawResult(data) {
-        // 기존 마커 제거 코드...
-        for (var i = 0; i < markers.length; i++) {
-            markers[i].setMap(null);
-        }
-        markers = [];
-        const colors = ['#FF0000', '#0000FF', '#008000', '#FFA500', '#800080']; 
+    // 다른 인포윈도우를 모두 닫는 함수
+    function closeAllInfoWindows() {
+        infoWindows.forEach(iw => iw.close());
+        infoWindows = [];
+    }
 
-        // 점 찍기
+    function drawResult(data) {
+        // 초기화
+        for (var i = 0; i < markers.length; i++) { markers[i].setMap(null); }
+        markers = [];
+        closeAllInfoWindows();
+
+        // 🎨 전문적인 색상 팔레트 (Tableau 10 color scheme 활용)
+        const colors = [
+            '#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F', 
+            '#EDC948', '#B07AA1', '#FF9DA7', '#9C755F', '#BAB0AC'
+        ];
+
+        // 1. 다각형(영역) 그리기
+        if (data.polygons) {
+            data.polygons.forEach(poly => {
+                var path = poly.path.map(p => new kakao.maps.LatLng(p.lat, p.lon));
+                var polygon = new kakao.maps.Polygon({
+                    map: map, path: path,
+                    strokeWeight: 2, strokeColor: colors[poly.cluster_id % colors.length],
+                    strokeOpacity: 0.9, fillColor: colors[poly.cluster_id % colors.length],
+                    fillOpacity: 0.3 
+                });
+                markers.push(polygon);
+            });
+        }
+
+        // 2. 일반 점 찍기
         data.points.forEach(point => {
             var circle = new kakao.maps.Circle({
                 center : new kakao.maps.LatLng(point.lat, point.lon),
-                radius: 15, strokeWeight: 1, strokeColor: colors[point.cluster % colors.length],
-                strokeOpacity: 0.8, fillColor: colors[point.cluster % colors.length], fillOpacity: 0.6
+                radius: 12, strokeWeight: 1, strokeColor: '#fff',
+                strokeOpacity: 0.5, fillColor: colors[point.cluster % colors.length],
+                fillOpacity: 0.7
             });
             circle.setMap(map);
             markers.push(circle);
         });
 
-        // 거점 찍기
+// 주소 변환 객체 생성
+        var geocoder = new kakao.maps.services.Geocoder();
+
+        // 3. 거점(깃발) 찍기 및 인터랙션 추가
         var imageSrc = "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png"; 
+        
         data.centers.forEach(center => {
-            var imageSize = new kakao.maps.Size(35, 50); 
+            var imageSize = new kakao.maps.Size(40, 55); 
             var markerImage = new kakao.maps.MarkerImage(imageSrc, imageSize); 
             var marker = new kakao.maps.Marker({
                 map: map, position: new kakao.maps.LatLng(center.lat, center.lon),
-                title: "추천 거점 " + center.cluster_id, image: markerImage
+                title: "추천 거점", image: markerImage, zIndex: 10
             });
+
+            // 💬 마커 클릭 이벤트 (주소 변환 로직 포함)
+            kakao.maps.event.addListener(marker, 'click', function() {
+                // 클릭하면 다른 말풍선 닫기
+                closeAllInfoWindows();
+
+                // 1. 좌표 -> 주소 변환 요청 (coord2Address)
+                // 주의: 카카오는 (lon, lat) 순서로 받음
+                geocoder.coord2Address(center.lon, center.lat, function(result, status) {
+                    if (status === kakao.maps.services.Status.OK) {
+                        // 2. 주소 가져오기 (도로명 주소가 있으면 우선 사용, 없으면 지번 주소)
+                        var detailAddr = !!result[0].road_address ? 
+                                         result[0].road_address.address_name : 
+                                         result[0].address.address_name;
+                        
+                        // 3. 인포윈도우 내용 구성
+                        var iwContent = `
+                            <div style="padding:15px; min-width:200px; border-radius:5px;">
+                                <h4 style="margin:0 0 10px 0; color:#2c3e50; border-bottom:1px solid #eee; padding-bottom:5px;">
+                                    🚩 추천 거점 ${center.cluster_id + 1}
+                                </h4>
+                                <p style="margin:5px 0; font-size:0.9rem; color:#555;">
+                                    <b>주소:</b> ${detailAddr}
+                                </p>
+                                <p style="margin:5px 0; font-size:0.9rem; color:#555;">
+                                    <b>커버 주문:</b> <span style="color:#e74c3c; font-weight:bold;">${center.count}건</span>
+                                </p>
+                            </div>
+                        `;
+
+                        // 4. 인포윈도우 열기
+                        var infowindow = new kakao.maps.InfoWindow({
+                            content : iwContent,
+                            removable : true
+                        });
+                        infowindow.open(map, marker);
+                        infoWindows.push(infowindow);
+                    }
+                });
+            });
+
             markers.push(marker);
         });
     }
