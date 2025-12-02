@@ -29,6 +29,7 @@
         </div>
         
         <button onclick="runAnalysis()">🚀 분석 시작</button>
+        <button class="btn-secondary" onclick="runElbow()">📈 최적 K 찾기 (Elbow)</button>
         
         <div id="result-stats">
             <div id="status-text">파일을 선택하고 분석 버튼을 누르세요.</div>
@@ -37,6 +38,15 @@
     </div>
     
     <div id="map" class="map-container"></div>
+</div>
+
+<div id="elbowModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <h3 style="margin-top:0;">📉 최적의 K값 찾기 (Elbow Method)</h3>
+        <p style="font-size:0.9rem; color:#666;">그래프가 팔꿈치처럼 꺾이는 지점이 최적의 개수입니다.</p>
+        <canvas id="elbowChart"></canvas>
+    </div>
 </div>
 
 <script src="/static/script.js"></script>

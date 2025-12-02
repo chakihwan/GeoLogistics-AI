@@ -166,3 +166,73 @@ function drawResult(data) {
         markers.push(marker);
     });
 }
+
+// --- Elbow Method 관련 로직 ---
+
+var modal = document.getElementById("elbowModal");
+var chartInstance = null; // 차트 객체 저장용
+
+function closeModal() {
+    modal.style.display = "none";
+}
+
+// 모달 바깥 클릭 시 닫기
+window.onclick = function(event) {
+    if (event.target == modal) { modal.style.display = "none"; }
+}
+
+async function runElbow() {
+    const fileInput = document.getElementById('csv-file');
+    if (fileInput.files.length === 0) {
+        alert("먼저 데이터 파일을 선택해주세요!");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    // 모달 열고 로딩 표시
+    modal.style.display = "block";
+    
+    // 기존 차트가 있으면 삭제 (초기화)
+    if (chartInstance) { chartInstance.destroy(); }
+
+    try {
+        const response = await fetch('/elbow', { method: 'POST', body: formData });
+        if (!response.ok) throw new Error("서버 오류");
+        
+        const data = await response.json();
+        drawElbowChart(data.ks, data.inertias);
+        
+    } catch (error) {
+        alert("계산 실패: " + error.message);
+        closeModal();
+    }
+}
+
+function drawElbowChart(labels, dataPoints) {
+    var ctx = document.getElementById('elbowChart').getContext('2d');
+    chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels, // X축 (1, 2, 3...)
+            datasets: [{
+                label: 'Inertia (오차 제곱합)',
+                data: dataPoints, // Y축 값
+                borderColor: '#3498db',
+                backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                borderWidth: 2,
+                pointRadius: 5,
+                pointBackgroundColor: '#e74c3c',
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { title: { display: true, text: '군집 개수 (K)' } },
+                y: { title: { display: true, text: 'Inertia (낮을수록 좋음)' } }
+            }
+        }
+    });
+}

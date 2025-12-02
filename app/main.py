@@ -5,7 +5,7 @@ import pandas as pd
 import io # 메모리 상의 파일을 읽기 위해 필요
 import os
 import time
-from app.services import perform_kmeans
+from app.services import perform_kmeans, calculate_elbow
 
 app = FastAPI()
 
@@ -25,36 +25,46 @@ def read_root():
     return HTMLResponse(content=final_html)
     
 @app.post("/analyze")
-async def analyze_data(
-    k: int = Form(...),       # HTML Form에서 'k'라는 이름으로 온 값
-    file: UploadFile = File(...) # HTML Form에서 'file'이라는 이름으로 온 파일
-):
-    """
-    사용자가 업로드한 CSV 파일을 받아 K-Means 분석 수행
-    """
-    # 1. 파일 형식 검사 (확장자 확인)
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="CSV 파일만 업로드 가능합니다.")
-
-    # 2. 업로드된 파일 읽기
+async def analyze_data(k: int = Form(...), file: UploadFile = File(...)):
+    # 1. 파일 읽기 (인코딩 처리)
+    contents = await file.read()
     try:
-        # 파일 내용을 바이트(byte)로 읽음
-        contents = await file.read()
-        # 바이트 데이터를 Pandas DataFrame으로 변환
-        df = pd.read_csv(io.BytesIO(contents))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"파일 읽기 실패: {str(e)}")
+        df = pd.read_csv(io.BytesIO(contents), encoding='utf-8')
+    except UnicodeDecodeError:
+        try:
+            df = pd.read_csv(io.BytesIO(contents), encoding='cp949') # 한글 윈도우 인코딩
+        except:
+            df = pd.read_csv(io.BytesIO(contents), encoding='euc-kr') # 또 다른 한글 인코딩
 
-    # 3. 데이터 컬럼 확인 (lat, lon이 있는지)
+    # 2. 컬럼명 통일 (한글 -> 영어)
+    df.rename(columns={"위도": "lat", "경도": "lon"}, inplace=True)
+
+    # 3. 필수 컬럼 확인
     if 'lat' not in df.columns or 'lon' not in df.columns:
-         raise HTTPException(status_code=400, detail="CSV 파일에 'lat'(위도), 'lon'(경도) 컬럼이 있어야 합니다.")
+         raise HTTPException(status_code=400, detail="필수 컬럼(lat, lon 또는 위도, 경도)이 없습니다.")
 
-    # 4. K값 유효성 검사
+    # [핵심 수정] 4. 데이터 강제 형변환 (문자열 -> 숫자)
+    # "37.5", "  37.5 " 같은 건 숫자로 바꾸고, "-", "null" 같은 건 NaN(빈값)으로 만듦
+    df['lat'] = pd.to_numeric(df['lat'], errors='coerce')
+    df['lon'] = pd.to_numeric(df['lon'], errors='coerce')
+
+    # 5. 결측치(빈 값, NaN) 제거
+    df = df.dropna(subset=['lat', 'lon'])
+
+    # 6. 데이터 샘플링 (속도 향상)
+    MAX_SAMPLES = 5000
+    if len(df) > MAX_SAMPLES:
+        df = df.sample(n=MAX_SAMPLES, random_state=42)
+
+    if len(df) == 0:
+        raise HTTPException(status_code=400, detail="유효한 데이터가 없습니다.")
+
+    # 5. K값 유효성 검사
     if k > len(df):
         raise HTTPException(status_code=400, detail="K값이 데이터 개수보다 큽니다.")
     time.sleep(1.0)
 
-    # 5. 분석 수행 (기존 로직 재사용)
+    # 분석 수행 
     try:
         result = perform_kmeans(df, k)
         return result
@@ -66,15 +76,23 @@ async def get_elbow_data(file: UploadFile = File(...)):
     """
     Elbow Method 그래프를 그리기 위한 데이터 반환
     """
-    # 파일 읽기 로직 (analyze와 동일)
+    contents = await file.read()
     try:
-        contents = await file.read()
-        df = pd.read_csv(io.BytesIO(contents))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"파일 읽기 실패: {str(e)}")
-
+        df = pd.read_csv(io.BytesIO(contents), encoding='utf-8')
+    except UnicodeDecodeError:
+        df = pd.read_csv(io.BytesIO(contents), encoding='cp949')
+        
+    df.rename(columns={"위도": "lat", "경도": "lon"}, inplace=True)
+    
     if 'lat' not in df.columns or 'lon' not in df.columns:
          raise HTTPException(status_code=400, detail="필수 컬럼 누락")
+
+    # [NEW] 결측치 제거 및 샘플링
+    df = df.dropna(subset=['lat', 'lon'])
+    
+    MAX_SAMPLES = 5000
+    if len(df) > MAX_SAMPLES:
+        df = df.sample(n=MAX_SAMPLES, random_state=42)
 
     # 분석 수행
     try:
