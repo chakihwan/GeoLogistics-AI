@@ -21,7 +21,7 @@
 
 | **1. 메인 화면 & 파일 업로드** | **2. K-Means 분석 결과 (지도)** |
 |:---:|:---:|
-| ![Main UI](images/main_screenshot.png) | ![Map Result](images/map_result.png) |
+| ![Main UI](<img width="1920" height="1040" alt="image" src="https://github.com/user-attachments/assets/772452d4-9831-48a8-95e8-5584bf71e4b1" />)(<img width="1920" height="1040" alt="image" src="https://github.com/user-attachments/assets/80776b6e-3ff2-48bb-a261-cb96e187dfad" />) | ![Map Result](images/map_result.png) |
 | *공공데이터 CSV 업로드 및 로딩 UI* | *클러스터링 영역 및 추천 거점 시각화* |
 
 | **3. 최적 K값 탐색 (Elbow)** | **4. 다중 필터링 & 결과 저장** |
