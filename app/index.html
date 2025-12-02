@@ -20,7 +20,21 @@
         
         <div class="control-group">
             <label for="csv-file">📂 1. 데이터 파일 업로드 (.csv)</label>
-            <input type="file" id="csv-file" accept=".csv">
+            <input type="file" id="csv-file" accept=".csv" onchange="loadPreview()">
+        </div>
+
+        <div class="control-group">
+            <label for="category-select">🍕 업종 필터 (선택)</label>
+            <select id="category-select" disabled style="width:100%; padding:10px; border-radius:6px; border:1px solid #ddd;">
+                <option value="all">전체 업종</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="region-select">Map 🗺️ 지역 필터 (선택)</label>
+            <select id="region-select" disabled style="width:100%; padding:10px; border-radius:6px; border:1px solid #ddd;">
+                <option value="all">전체 지역</option>
+            </select>
         </div>
 
         <div class="control-group">

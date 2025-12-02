@@ -31,43 +31,96 @@ window.onload = function() {
     });
 };
 
+// 👇 [New] 파일 미리보기 및 옵션 로드 함수
+async function loadPreview() {
+    const fileInput = document.getElementById('csv-file');
+    const catSelect = document.getElementById('category-select');
+    const regSelect = document.getElementById('region-select');
+
+    if (fileInput.files.length === 0) return;
+
+    // 초기화
+    catSelect.innerHTML = '<option value="all">로드 중...</option>';
+    regSelect.innerHTML = '<option value="all">로드 중...</option>';
+    catSelect.disabled = true;
+    regSelect.disabled = true;
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+        const response = await fetch('/preview', { method: 'POST', body: formData });
+        const data = await response.json();
+
+        // 1. 업종 옵션 채우기
+        catSelect.innerHTML = '<option value="all">전체 업종</option>';
+        if (data.categories && data.categories.length > 0) {
+            data.categories.forEach(cat => {
+                catSelect.innerHTML += `<option value="${cat}">${cat}</option>`;
+            });
+            catSelect.disabled = false;
+        } else {
+            catSelect.innerHTML = '<option value="all">업종 정보 없음</option>';
+        }
+
+        // 2. 지역 옵션 채우기
+        regSelect.innerHTML = '<option value="all">전체 지역</option>';
+        if (data.regions && data.regions.length > 0) {
+            data.regions.forEach(reg => {
+                regSelect.innerHTML += `<option value="${reg}">${reg}</option>`;
+            });
+            regSelect.disabled = false;
+        } else {
+            regSelect.innerHTML = '<option value="all">지역 정보 없음</option>';
+        }
+
+    } catch (error) {
+        console.error("미리보기 실패:", error);
+        catSelect.innerHTML = '<option value="all">로드 실패</option>';
+        regSelect.innerHTML = '<option value="all">로드 실패</option>';
+    }
+}
+
+// 👇 [Update] 분석 실행 함수 (필터 값 전송 추가)
 async function runAnalysis() {
     const fileInput = document.getElementById('csv-file');
     const kValue = document.getElementById('k-value').value;
+    const category = document.getElementById('category-select').value; // 추가
+    const region = document.getElementById('region-select').value;     // 추가
+    
+    // ... (로딩 UI 처리 등 기존 코드 동일) ...
     const statusText = document.getElementById('status-text');
     const spinner = document.getElementById('loading-spinner');
-
+    
     if (fileInput.files.length === 0) {
-        alert("CSV 파일을 먼저 선택해주세요!");
-        return;
+        alert("파일을 선택해주세요."); return;
     }
-
-    // UI 로딩 상태로 변경
-    statusText.innerHTML = "데이터 분석 중입니다...";
-    spinner.classList.remove('hidden'); // 스피너 표시
+    
+    statusText.innerHTML = "데이터 필터링 및 분석 중...";
+    spinner.classList.remove('hidden');
 
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
     formData.append('k', kValue);
+    formData.append('category', category); // 👈 백엔드로 전송
+    formData.append('region', region);     // 👈 백엔드로 전송
 
     try {
         const response = await fetch('/analyze', { method: 'POST', body: formData });
-
+        // ... (나머지 에러 처리 및 그리기 로직 기존과 동일) ...
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.detail);
         }
-
         const data = await response.json();
         drawResult(data);
-        statusText.innerHTML = `✅ <b>분석 완료!</b><br>총 ${data.points.length}개 지점 분석<br><b>${data.centers.length}개 최적 거점</b> 도출`;
+        statusText.innerHTML = `✅ <b>분석 완료!</b><br>조건: ${category}/${region}<br>총 ${data.points.length}개 지점`;
 
     } catch (error) {
-        console.error(error);
-        alert("오류 발생: " + error.message);
+        alert("오류: " + error.message);
         statusText.innerHTML = "❌ 분석 실패";
     } finally {
-        spinner.classList.add('hidden'); // 스피너 숨김
+        spinner.classList.add('hidden');
     }
 }
 
