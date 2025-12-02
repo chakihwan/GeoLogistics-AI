@@ -14,14 +14,14 @@
 ## 📸 시연 영상 및 스크린샷 (Demo & Screenshots)
 
 ### 🎥 시연 영상 (Demo Video)
-![Demo Preview](https://via.placeholder.com/800x450.png?text=Demo+Video+Placeholder)
+![Demo Preview](images/demo.mp4)
 > *GeoLogistics AI 시연 영상: 데이터 업로드부터 최적 거점 도출까지의 과정*
 
 ### 🖥️ 주요 기능 화면
 
 | **1. 메인 화면 & 파일 업로드** | **2. K-Means 분석 결과 (지도)** |
 |:---:|:---:|
-| ![Main UI](main_screenshot.png) | ![Map Result](images/map_result.png) |
+| ![Main UI](images/main_screenshot.png) | ![Map Result](images/map_result.png) |
 | *공공데이터 CSV 업로드 및 로딩 UI* | *클러스터링 영역 및 추천 거점 시각화* |
 
 | **3. 최적 K값 탐색 (Elbow)** | **4. 다중 필터링 & 결과 저장** |
