@@ -60,3 +60,13 @@ button:hover { background-color: #2980b9; }
     color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;
 }
 .close:hover { color: black; }
+
+/* 결과 다운로드 버튼 약간 엑셀느낌?*/
+.btn-download {
+    background-color: #27ae60; 
+    margin-top: 10px;
+    color: white;
+    border: none; padding: 12px; width: 100%;
+    border-radius: 6px; font-weight: bold; cursor: pointer;
+}
+.btn-download:hover { background-color: #219150; }

@@ -71,7 +71,7 @@ def calculate_elbow(df: pd.DataFrame, max_k: int = 10):
     for k in range(1, limit + 1):
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
         kmeans.fit(X)
-        # ⚠️ inertia_ 값도 numpy float이므로 변환 필요
+        # inertia_ 값도 numpy float이므로 변환 필요
         inertias.append(float(kmeans.inertia_))
         
     return {

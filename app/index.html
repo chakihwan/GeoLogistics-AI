@@ -20,6 +20,11 @@
         
         <div class="control-group">
             <label for="csv-file">📂 1. 데이터 파일 업로드 (.csv)</label>
+            <div style="margin-bottom: 5px; font-size: 0.85rem;">
+                <a href="/static/sample_data.csv" download style="color:#3498db; text-decoration:none;">
+                    ⬇️ 테스트용 샘플 데이터 받기
+                </a>
+            </div>
             <input type="file" id="csv-file" accept=".csv" onchange="loadPreview()">
         </div>
 
@@ -45,6 +50,10 @@
         <button onclick="runAnalysis()">🚀 분석 시작</button>
         <button class="btn-secondary" onclick="runElbow()">📈 최적 K 찾기 (Elbow)</button>
         
+        <button id="download-btn" class="btn-download" onclick="downloadResult()" style="display:none;">
+            💾 결과 저장 (.csv)
+        </button>
+
         <div id="result-stats">
             <div id="status-text">파일을 선택하고 분석 버튼을 누르세요.</div>
             <div id="loading-spinner" class="spinner hidden"></div>
