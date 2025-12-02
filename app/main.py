@@ -6,7 +6,7 @@ import io # 메모리 상의 파일을 읽기 위해 필요
 import os
 import time
 from app.services import perform_kmeans, calculate_elbow
-from typing import Optional
+from typing import Optional, List
 
 app = FastAPI()
 
@@ -93,19 +93,19 @@ async def preview_data(file: UploadFile = File(...)):
 async def analyze_data(
     k: int = Form(...),
     file: UploadFile = File(...),
-    category: Optional[str] = Form(None), # 선택된 업종 (없을수도 있음)
-    region: Optional[str] = Form(None)    # 선택된 지역 (없을수도 있음)
+    category: List[str] = Form(None), # 선택된 업종 (없을수도 있음)
+    region: List[str] = Form(None)    # 선택된 지역 (없을수도 있음) 리스트로 받게 변경
 ):
     df = await read_csv_file(file)
 
     # --- 🔍 필터링 로직 시작 ---
     # 1. 업종 필터링
-    if category and category != "all" and "category" in df.columns:
-        df = df[df["category"] == category]
+    if category and "all" not in category and "category" in df.columns:
+        df = df[df["category"].isin(category)]  # (== 대신 isin)
         
     # 2. 지역 필터링
     if region and region != "all" and "region" in df.columns:
-        df = df[df["region"] == region]
+        df = df[df["region"].isin(region)]
         
     if len(df) == 0:
         raise HTTPException(status_code=400, detail="선택한 조건에 맞는 데이터가 없습니다.")

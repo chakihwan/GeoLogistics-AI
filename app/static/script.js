@@ -2,10 +2,80 @@
  * Global Variables (전역 변수 설정)
  * ==========================================
  */
-var map;                // 카카오맵 객체를 담을 변수
-var markers = [];       // 지도에 표시된 마커(점, 다각형 등)를 관리하는 배열 (나중에 지울 때 필요)
-var infoWindows = [];   // 열려있는 인포윈도우(설명창)를 관리하기 위한 배열
-var currentData = null; // ★중요★ 분석이 끝난 데이터를 저장해두는 변수 (다운로드 기능에서 사용)
+var map;                // 카카오맵 객체
+var markers = [];       // 지도 마커 관리 배열
+var infoWindows = [];   // 인포윈도우 관리 배열
+var currentData = null; // 분석 결과 데이터 (다운로드용)
+
+// 로딩창 제어 헬퍼 함수
+function showLoading(message) {
+    const overlay = document.getElementById('loading-overlay');
+    const msgEl = document.getElementById('loading-message');
+    
+    if (overlay && msgEl) {
+        msgEl.innerText = message || "처리 중...";
+        overlay.style.display = 'flex'; // 강제로 보이기
+    }
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.style.display = 'none'; // 강제로 숨기기
+    }
+}
+
+/* * ==========================================
+ * Helper Functions (UI 동작 관련 - 드롭다운/라벨)
+ * ==========================================
+ */
+
+// 1. 드롭다운 열고 닫기 (토글)
+function toggleDropdown(id) {
+    const el = document.getElementById(id);
+    if (el.classList.contains('hidden')) {
+        el.classList.remove('hidden');
+    } else {
+        el.classList.add('hidden');
+    }
+}
+
+// 2. 다른 곳 클릭하면 드롭다운 닫기 (UX 향상)
+window.addEventListener('click', function(e) {
+    if (!e.target.closest('.relative')) {
+        const catDropdown = document.getElementById('category-dropdown');
+        const regDropdown = document.getElementById('region-dropdown');
+        if(catDropdown) catDropdown.classList.add('hidden');
+        if(regDropdown) regDropdown.classList.add('hidden');
+    }
+});
+
+// 3. 선택된 개수에 따라 버튼 텍스트 업데이트 ("한식 외 2건" 등)
+function updateLabel(type) {
+    // type: 'category' 또는 'region'
+    const checkboxes = document.querySelectorAll(`input[name="${type}"]:checked`);
+    const btnText = document.getElementById(`${type}-btn`).querySelector('span');
+    
+    if (checkboxes.length === 0) {
+        btnText.innerText = "선택된 항목 없음 (전체)";
+        btnText.classList.add("text-gray-500");
+    } else if (checkboxes.length === 1) {
+        // 하나만 선택했으면 그 이름 그대로 출력
+        btnText.innerText = checkboxes[0].value;
+        btnText.classList.remove("text-gray-500");
+    } else {
+        // 여러 개면 "OOO 외 N개" 형식으로 표시
+        btnText.innerText = `${checkboxes[0].value} 외 ${checkboxes.length - 1}개`;
+        btnText.classList.remove("text-gray-500");
+    }
+}
+
+// 4. 전체 선택/해제 로직 (라벨 업데이트 포함)
+function toggleAll(source, name) {
+    const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
+    checkboxes.forEach(cb => cb.checked = source.checked);
+    updateLabel(name); // 체크 상태가 바뀌었으니 라벨도 바로 업데이트
+}
 
 
 /* * ==========================================
@@ -15,98 +85,109 @@ var currentData = null; // ★중요★ 분석이 끝난 데이터를 저장해�
 function initMap() {
     var container = document.getElementById('map');
     var options = {
-        center: new kakao.maps.LatLng(37.498095, 127.027610), // 초기 중심 좌표 (강남역 부근)
-        level: 7 // 지도의 확대 레벨 (숫자가 클수록 멀리 보임)
+        center: new kakao.maps.LatLng(37.498095, 127.027610), // 강남역 부근
+        level: 7
     };
-    
-    // 지도 생성
     map = new kakao.maps.Map(container, options);
     
-    // 지도 컨트롤러 추가 (스카이뷰, 줌 컨트롤)
+    // 컨트롤러 추가
     var mapTypeControl = new kakao.maps.MapTypeControl();
     map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
     var zoomControl = new kakao.maps.ZoomControl();
     map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
 }
 
-// 웹페이지가 다 로딩되면 실행되는 함수
 window.onload = function() {
-    // 1. 지도 생성
     initMap(); 
 
-    // 2. K값 입력창에서 엔터(Enter) 키 입력 시 분석 실행 기능
+    // 엔터키 이벤트 (K값 입력창)
     var kInput = document.getElementById('k-value');
     if(kInput) {
         kInput.addEventListener("keyup", function(event) {
             if (event.key === "Enter") {
-                event.preventDefault(); // 브라우저 기본 동작 방지
-                runAnalysis(); // 분석 함수 실행
+                event.preventDefault(); 
+                runAnalysis(); 
             }
         });
     }
 
-    // 3. [다운로드] 버튼 클릭 이벤트 연결
-    // HTML에 id="download-btn"인 버튼이 있어야 동작합니다.
+    // 다운로드 버튼 이벤트
     var downloadBtn = document.getElementById('download-btn');
     if (downloadBtn) {
-        // 버튼을 누르면 downloadResult 함수 실행
         downloadBtn.addEventListener('click', downloadResult);
     }
 };
 
 
 /* * ==========================================
- * Feature 1: 데이터 미리보기 (Preview)
+ * Feature 1: 데이터 미리보기 (Preview) - 드롭다운 생성
  * ==========================================
  */
 async function loadPreview() {
     const fileInput = document.getElementById('csv-file');
-    const catSelect = document.getElementById('category-select');
-    const regSelect = document.getElementById('region-select');
+    const catContainer = document.getElementById('category-list');
+    const regContainer = document.getElementById('region-list');
 
-    // 파일이 선택되지 않았으면 중단
     if (fileInput.files.length === 0) return;
 
-    // UI: 로딩 중 표시
-    catSelect.innerHTML = '<option value="all">로드 중...</option>';
-    regSelect.innerHTML = '<option value="all">로드 중...</option>';
-    catSelect.disabled = true;
-    regSelect.disabled = true;
+    // ★ 로딩 시작
+    showLoading("파일 업로드 및 분석 중...");
 
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
     try {
-        // 서버의 /preview API 호출
         const response = await fetch('/preview', { method: 'POST', body: formData });
+        
+        if (!response.ok) throw new Error("서버 응답 오류");
+        
         const data = await response.json();
 
-        // 1. 업종(Category) 옵션 채우기
-        catSelect.innerHTML = '<option value="all">전체 업종</option>';
+        // 체크박스 HTML 생성 헬퍼
+        const createCheckboxHTML = (name, value, label) => `
+            <div class="flex items-center mb-2 hover:bg-gray-100 p-1 rounded transition">
+                <input id="${name}-${value}" type="checkbox" name="${name}" value="${value}" 
+                       onchange="updateLabel('${name}')"
+                       class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer">
+                <label for="${name}-${value}" class="ml-2 text-sm text-gray-700 cursor-pointer select-none w-full block">
+                    ${label}
+                </label>
+            </div>
+        `;
+
+        // 1. 업종 목록 생성
         if (data.categories && data.categories.length > 0) {
-            data.categories.forEach(cat => {
-                catSelect.innerHTML += `<option value="${cat}">${cat}</option>`;
-            });
-            catSelect.disabled = false;
+            let html = `<div class="flex items-center mb-2 pb-2 border-b">
+                            <input type="checkbox" onchange="toggleAll(this, 'category')" class="w-4 h-4 cursor-pointer">
+                            <label class="ml-2 text-sm font-bold text-blue-600">전체 선택/해제</label>
+                        </div>`;
+            data.categories.forEach(cat => html += createCheckboxHTML('category', cat, cat));
+            catContainer.innerHTML = html;
         } else {
-            catSelect.innerHTML = '<option value="all">업종 정보 없음</option>';
+            catContainer.innerHTML = '<div class="p-2 text-red-500">업종 정보 없음</div>';
         }
 
-        // 2. 지역(Region) 옵션 채우기
-        regSelect.innerHTML = '<option value="all">전체 지역</option>';
+        // 2. 지역 목록 생성
         if (data.regions && data.regions.length > 0) {
-            data.regions.forEach(reg => {
-                regSelect.innerHTML += `<option value="${reg}">${reg}</option>`;
-            });
-            regSelect.disabled = false;
+            let html = `<div class="flex items-center mb-2 pb-2 border-b">
+                            <input type="checkbox" onchange="toggleAll(this, 'region')" class="w-4 h-4 cursor-pointer">
+                            <label class="ml-2 text-sm font-bold text-blue-600">전체 선택/해제</label>
+                        </div>`;
+            data.regions.forEach(reg => html += createCheckboxHTML('region', reg, reg));
+            regContainer.innerHTML = html;
         } else {
-            regSelect.innerHTML = '<option value="all">지역 정보 없음</option>';
+            regContainer.innerHTML = '<div class="p-2 text-red-500">지역 정보 없음</div>';
         }
+
+        updateLabel('category');
+        updateLabel('region');
 
     } catch (error) {
         console.error("미리보기 실패:", error);
-        catSelect.innerHTML = '<option value="all">로드 실패</option>';
-        regSelect.innerHTML = '<option value="all">로드 실패</option>';
+        alert("파일 로드 실패: " + error.message);
+    } finally {
+        //  로딩 종료 (성공하든 실패하든 무조건 실행)
+        hideLoading();
     }
 }
 
@@ -116,67 +197,77 @@ async function loadPreview() {
  * ==========================================
  */
 async function runAnalysis() {
-    // HTML 요소 가져오기
     const fileInput = document.getElementById('csv-file');
     const kValue = document.getElementById('k-value').value;
-    const category = document.getElementById('category-select').value;
-    const region = document.getElementById('region-select').value;
     
+    // UI가 드롭다운으로 바뀌어도 input[type=checkbox]는 그대로이므로
+    // querySelectorAll로 체크된 값들을 가져오는 방식은 동일합니다.
+    const selectedCategories = Array.from(document.querySelectorAll('input[name="category"]:checked')).map(cb => cb.value);
+    const selectedRegions = Array.from(document.querySelectorAll('input[name="region"]:checked')).map(cb => cb.value);
+
     const statusText = document.getElementById('status-text');
     const spinner = document.getElementById('loading-spinner');
     const downloadBtn = document.getElementById('download-btn');
 
-    // 예외 처리: 파일이 없으면 경고
     if (fileInput.files.length === 0) {
         alert("파일을 먼저 선택해주세요."); return;
     }
     
-    // UI 상태 업데이트 (분석 중 표시)
+    showLoading("최적 거점 분석 중...");
+    
     statusText.innerHTML = "데이터 필터링 및 분석 중...";
-    spinner.classList.remove('hidden'); // 뺑글뺑글 로딩바 표시
-    downloadBtn.style.display = 'none'; // 분석 중엔 다운로드 버튼 숨김
+    downloadBtn.style.display = 'none';
 
-    // 서버로 보낼 데이터 준비
+    // FormData 구성
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
     formData.append('k', kValue);
-    formData.append('category', category);
-    formData.append('region', region);
+
+    // 업종 데이터 추가 (배열 -> 개별 필드)
+    if (selectedCategories.length === 0 || selectedCategories.includes('all')) {
+        formData.append('category', 'all');
+    } else {
+        selectedCategories.forEach(val => formData.append('category', val));
+    }
+
+    // 지역 데이터 추가
+    if (selectedRegions.length === 0 || selectedRegions.includes('all')) {
+        formData.append('region', 'all');
+    } else {
+        selectedRegions.forEach(val => formData.append('region', val));
+    }
 
     try {
-        // 서버의 /analyze API 호출 (Python 백엔드)
         const response = await fetch('/analyze', { method: 'POST', body: formData });
 
         if (!response.ok) {
             const err = await response.json();
-            throw new Error(err.detail); // 에러 발생 시 catch로 이동
+            throw new Error(err.detail);
         }
 
         const data = await response.json();
-        
-        // ★ 핵심: 받아온 데이터를 전역 변수에 저장 (나중에 다운로드할 때 씀)
         currentData = data; 
         
-        // 분석이 성공했으므로 다운로드 버튼을 보여줌
         downloadBtn.style.display = 'block';
-
-        // 지도 그리기 함수 호출
         drawResult(data);
         
         // 결과 텍스트 업데이트
         let filterInfo = "";
-        if(category !== 'all') filterInfo += `[${category}] `;
-        if(region !== 'all') filterInfo += `[${region}] `;
+        if(!selectedCategories.includes('all') && selectedCategories.length > 0) {
+            filterInfo += `[업종: ${selectedCategories.length}개 선택] `;
+        }
+        if(!selectedRegions.includes('all') && selectedRegions.length > 0) {
+            filterInfo += `[지역: ${selectedRegions.length}개 선택] `;
+        }
         
-        statusText.innerHTML = `✅ <b>분석 완료!</b><br>${filterInfo}총 ${data.points.length}개 지점<br><b>${data.centers.length}개 최적 거점</b> 도출`;
+        statusText.innerHTML = `✅ <b>분석 완료!</b><br>${filterInfo}<br>총 ${data.points.length}개 지점 중 <b>${data.centers.length}개 최적 거점</b> 도출`;
 
     } catch (error) {
         console.error(error);
         alert("오류 발생: " + error.message);
         statusText.innerHTML = "❌ 분석 실패";
     } finally {
-        // 성공하든 실패하든 로딩바는 숨김
-        spinner.classList.add('hidden'); 
+        hideLoading();
     }
 }
 
@@ -185,26 +276,23 @@ async function runAnalysis() {
  * Feature 3: 지도 시각화 (Markers & Polygons)
  * ==========================================
  */
-// 열려있는 모든 인포윈도우 닫기
 function closeAllInfoWindows() {
     infoWindows.forEach(iw => iw.close());
     infoWindows = [];
 }
 
-// 실제 지도에 점과 다각형을 찍는 함수
 function drawResult(data) {
-    // 1. 기존 마커들 싹 지우기 (초기화)
+    // 마커 초기화
     for (var i = 0; i < markers.length; i++) { markers[i].setMap(null); }
     markers = [];
     closeAllInfoWindows();
 
-    // 색상 팔레트 (클러스터별로 다른 색을 주기 위함)
     const colors = [
         '#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F', 
         '#EDC948', '#B07AA1', '#FF9DA7', '#9C755F', '#BAB0AC'
     ];
 
-    // 2. 다각형(Convex Hull) 그리기 - 클러스터 영역 표시
+    // 1. 다각형 그리기
     if (data.polygons) {
         data.polygons.forEach(poly => {
             var path = poly.path.map(p => new kakao.maps.LatLng(p.lat, p.lon));
@@ -212,35 +300,34 @@ function drawResult(data) {
                 map: map, 
                 path: path,
                 strokeWeight: 2, 
-                strokeColor: colors[poly.cluster_id % colors.length], // 테두리 색
+                strokeColor: colors[poly.cluster_id % colors.length], 
                 strokeOpacity: 0.9, 
-                fillColor: colors[poly.cluster_id % colors.length],   // 채우기 색
+                fillColor: colors[poly.cluster_id % colors.length], 
                 fillOpacity: 0.3 
             });
-            markers.push(polygon); // 나중에 지우기 위해 배열에 저장
+            markers.push(polygon);
         });
     }
 
-    // 3. 일반 음식점 점 찍기
+    // 2. 점(Point) 그리기
     data.points.forEach(point => {
         var circle = new kakao.maps.Circle({
             center : new kakao.maps.LatLng(point.lat, point.lon),
-            radius: 12, // 점 크기
+            radius: 12, 
             strokeWeight: 1, 
             strokeColor: '#fff',
             strokeOpacity: 0.5, 
-            fillColor: colors[point.cluster % colors.length], // 클러스터 ID에 따른 색상
+            fillColor: colors[point.cluster % colors.length], 
             fillOpacity: 0.7
         });
         circle.setMap(map);
         markers.push(circle);
     });
 
-    // 주소를 좌표로 변환해주는 객체
     var geocoder = new kakao.maps.services.Geocoder();
     var imageSrc = "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png"; 
     
-    // 4. 추천 거점(Hub) 깃발 찍기
+    // 3. 거점(Hub) 깃발 그리기
     data.centers.forEach(center => {
         var imageSize = new kakao.maps.Size(40, 55); 
         var markerImage = new kakao.maps.MarkerImage(imageSrc, imageSize); 
@@ -250,21 +337,19 @@ function drawResult(data) {
             position: new kakao.maps.LatLng(center.lat, center.lon),
             title: "추천 거점", 
             image: markerImage, 
-            zIndex: 10 // 다른 마커보다 위에 보이게 함
+            zIndex: 10
         });
 
-        // 마커 클릭 시 주소와 정보를 보여주는 이벤트
+        // 클릭 이벤트 (인포윈도우)
         kakao.maps.event.addListener(marker, 'click', function() {
-            closeAllInfoWindows(); // 기존 창 닫기
+            closeAllInfoWindows();
 
-            // 좌표 -> 주소 변환
             geocoder.coord2Address(center.lon, center.lat, function(result, status) {
                 if (status === kakao.maps.services.Status.OK) {
                     var detailAddr = !!result[0].road_address ? 
                                      result[0].road_address.address_name : 
                                      result[0].address.address_name;
                     
-                    // 인포윈도우에 들어갈 HTML 내용
                     var iwContent = `
                         <div style="padding:15px; min-width:200px; border-radius:5px;">
                             <h4 style="margin:0 0 10px 0; color:#2c3e50; border-bottom:1px solid #eee; padding-bottom:5px;">
@@ -290,14 +375,13 @@ function drawResult(data) {
 
 
 /* * ==========================================
- * Feature 4: Elbow Method (최적 K 찾기)
+ * Feature 4: Elbow Method
  * ==========================================
  */
 var modal = document.getElementById("elbowModal");
-var chartInstance = null; // 차트 객체 (중복 생성 방지)
+var chartInstance = null; 
 
-function closeModal() { modal.style.display = "none"; }
-// 모달 바깥 영역 클릭 시 닫기
+function closeModal() { if(modal) modal.style.display = "none"; }
 window.onclick = function(event) { if (event.target == modal) { modal.style.display = "none"; } }
 
 async function runElbow() {
@@ -308,18 +392,13 @@ async function runElbow() {
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    // 모달 열기
-    modal.style.display = "block";
-    
-    // 기존 차트 삭제 (안 그러면 겹쳐 그려짐)
+    if(modal) modal.style.display = "block";
     if (chartInstance) { chartInstance.destroy(); }
 
     try {
         const response = await fetch('/elbow', { method: 'POST', body: formData });
         if (!response.ok) throw new Error("서버 오류");
         const data = await response.json();
-        
-        // 차트 그리기 함수 호출
         drawElbowChart(data.ks, data.inertias);
     } catch (error) {
         alert("계산 실패: " + error.message);
@@ -332,10 +411,10 @@ function drawElbowChart(labels, dataPoints) {
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels, // X축 (K값)
+            labels: labels,
             datasets: [{
                 label: 'Inertia (오차 제곱합)',
-                data: dataPoints, // Y축 (오차값)
+                data: dataPoints,
                 borderColor: '#3498db',
                 backgroundColor: 'rgba(52, 152, 219, 0.2)',
                 borderWidth: 2,
@@ -348,7 +427,7 @@ function drawElbowChart(labels, dataPoints) {
             responsive: true,
             scales: {
                 x: { title: { display: true, text: '군집 개수 (K)' } },
-                y: { title: { display: true, text: 'Inertia (낮을수록 좋음)' } }
+                y: { title: { display: true, text: 'Inertia' } }
             }
         }
     });
@@ -356,41 +435,36 @@ function drawElbowChart(labels, dataPoints) {
 
 
 /* * ==========================================
- * Feature 5: CSV 다운로드 (브라우저 처리)
+ * Feature 5: CSV 다운로드 (BOM 포함 + Blob 사용)
  * ==========================================
  */
 function downloadResult() {
-    // 저장할 데이터가 없으면 중단
     if (!currentData || !currentData.points) {
         alert("저장할 데이터가 없습니다."); return;
     }
 
-    // 1. CSV 파일의 헤더 작성 (\uFEFF는 엑셀에서 한글 깨짐 방지를 위한 BOM 문자)
+    // 1. CSV 헤더 (한글 깨짐 방지 BOM)
     let csvContent = "\uFEFFlat,lon,cluster_id,category,region\n";
 
-    // 2. 데이터 한 줄씩 CSV 형식으로 변환
+    // 2. 데이터 변환
     currentData.points.forEach(row => {
-        let cat = row.category ? row.category : ""; // 정보 없으면 빈칸
+        let cat = row.category ? row.category : "";
         let reg = row.region ? row.region : "";
         
-        // ★ 중요 수정 사항: row.cluster_id가 아니라 row.cluster를 사용해야 함
-        // (Python 백엔드의 services.py에서 labels_를 'cluster'라는 이름으로 저장했기 때문)
+        // ★ row.cluster (0,1,2...) 사용
         csvContent += `${row.lat},${row.lon},${row.cluster},${cat},${reg}\n`;
     });
 
-    // 3. Blob 객체 생성 (대용량 문자열을 파일 객체처럼 다룸)
+    // 3. Blob 생성 및 다운로드
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    
-    // 4. 가상의 다운로드 링크 생성 및 클릭 트리거
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", "cluster_result.csv"); // 저장될 파일명
+    link.setAttribute("download", "cluster_result.csv"); 
     
     document.body.appendChild(link);
-    link.click(); // 강제 클릭 발생
+    link.click(); 
     
-    // 5. 뒷정리 (메모리 해제)
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 }
