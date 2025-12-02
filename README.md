@@ -14,7 +14,9 @@
 ## 📸 시연 영상 및 스크린샷 (Demo & Screenshots)
 
 ### 🎥 시연 영상 (Demo Video)
-![Demo Preview](images/demo.mp4)
+https://github.com/user-attachments/assets/e5837fe9-a2cb-4c0f-ab7b-76739ed98b29
+
+
 > *GeoLogistics AI 시연 영상: 데이터 업로드부터 최적 거점 도출까지의 과정*
 
 ### 🖥️ 주요 기능 화면
