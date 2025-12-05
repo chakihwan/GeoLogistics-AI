@@ -34,7 +34,7 @@ def perform_kmeans(df: pd.DataFrame, k: int):
         })
 
     # 2. 전체 포인트 정리
-    # to_dict는 Pandas가 알아서 변환해주므로 보통 괜찮습니다.
+    # to_dict는 Pandas가 알아서 변환
     results["points"] = df.fillna("").to_dict(orient="records")
 
     # 3. 다각형(Convex Hull) 계산 (float() 형변환 필수!)
