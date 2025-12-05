@@ -8,7 +8,7 @@ def perform_kmeans(df: pd.DataFrame, k: int):
     X = df[['lat', 'lon']].values
 
     # K-Means 수행
-    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=11)
     kmeans.fit(X)
 
     df['cluster'] = kmeans.labels_
@@ -63,13 +63,13 @@ def perform_kmeans(df: pd.DataFrame, k: int):
 
     return results
 
-def calculate_elbow(df: pd.DataFrame, max_k: int = 10):
+def calculate_elbow(df: pd.DataFrame, max_k: int = 11):
     X = df[['lat', 'lon']].values
     inertias = []
     limit = min(len(df), max_k)
     
     for k in range(1, limit + 1):
-        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=11)
         kmeans.fit(X)
         # inertia_ 값도 numpy float이므로 변환 필요
         inertias.append(float(kmeans.inertia_))
