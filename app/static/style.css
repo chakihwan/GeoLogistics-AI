@@ -70,3 +70,39 @@ button:hover { background-color: #2980b9; }
     border-radius: 6px; font-weight: bold; cursor: pointer;
 }
 .btn-download:hover { background-color: #219150; }
+
+/* 드롭다운의 부모 요소에 기준점 설정 */
+.relative {
+    position: relative;
+}
+
+/* 드롭다운 리스트 공통 스타일 */
+#category-dropdown, #region-dropdown {
+    /* 위치를 버튼 바로 아래로 고정 */
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    z-index: 1000; /* 지도나 다른 요소보다 위에 뜨도록 설정 */
+    
+    /* 디자인 다듬기 */
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    
+    /* ★ 핵심: 높이 제한 및 스크롤 설정 ★ */
+    max-height: 200px; /* 높이를 200px(약 5개 항목)로 제한 */
+    overflow-y: auto;  /* 내용이 넘치면 세로 스크롤바 생성 */
+}
+
+/* 스크롤바 디자인 (크롬, 사파리 등) - 선택사항 */
+#category-dropdown::-webkit-scrollbar, 
+#region-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+#category-dropdown::-webkit-scrollbar-thumb, 
+#region-dropdown::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+    border-radius: 4px;
+}
